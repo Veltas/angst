@@ -1,4 +1,4 @@
 -- vim: set syntax=lua:
 
-g_completed_levels = {
+g_completedLevels = {
 }
