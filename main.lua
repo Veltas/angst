@@ -11,8 +11,6 @@ function love.load()
 	love.graphics.setDefaultFilter("linear", "nearest", 0)
 	love.graphics.setBackgroundColor(240, 240, 230)
 
-	g_testImage = love.graphics.newImage("assets/test.png")
-
 	require("levels")
 
 	g_currentLevel = Level:new{source = g_levelData1}

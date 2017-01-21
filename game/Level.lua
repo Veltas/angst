@@ -75,7 +75,7 @@ end
 function Level:blockCollision(tab)
 	assert(tab and type(tab) == "table" and tab.x and tab.y and tab.w and tab.h)
 	local tlCornerX, tlCornerY = math.floor(tab.x / g_tileSize) + 1, math.floor(tab.y / g_tileSize) + 1
-	local brCornerX, brCornerY = math.floor((tab.x + tab.w - 1) / g_tileSize) + 1, math.floor((tab.y + tab.h - 1) / g_tileSize) + 1
+	local brCornerX, brCornerY = math.floor((tab.x + tab.w) / g_tileSize) + 1, math.floor((tab.y + tab.h) / g_tileSize) + 1
 
 	local wallGrid = self.wallGrid
 	if tlCornerY == brCornerY then
@@ -101,31 +101,30 @@ function Level:blockCollision(tab)
 	end
 end
 
-local maxPlayerSpeed = 5
-local playerSpeedIncrement = 0.2
-local playerSpeedDecrement = 0.4
+local maxPlayerSpeed = 3
+local playerSpeedIncrement = 0.5
+local playerSpeedDecrement = 1
+local viewDeadzoneX = 15
+local viewDeadzoneY = 10
 
 function Level:step()
 	local player = self.player
 
-	-- keep view on player for now
-	g_viewX, g_viewY = player.x - 0.5*g_defaultWidth, player.y - 0.5*g_defaultHeight
-
 	-- handle user movement input
 	-- determine intended direction
 	local intendedDir = "neutral"
-	if     love.keyboard.isScancodeDown('w', 'up') then
-		intendedDir = "up"
-	elseif love.keyboard.isScancodeDown('s', 'down') then
-		intendedDir = "down"
-	elseif love.keyboard.isScancodeDown('a', 'left') then
+	if     love.keyboard.isScancodeDown('a', 'left') then
 		intendedDir = "left"
 	elseif love.keyboard.isScancodeDown('d', 'right') then
 		intendedDir = "right"
+	elseif love.keyboard.isScancodeDown('w', 'up') then
+		intendedDir = "up"
+	elseif love.keyboard.isScancodeDown('s', 'down') then
+		intendedDir = "down"
 	end
 	if intendedDir ~= player.direction then
-		-- if direction was moving and intention is to stop, slow down
-		if player.direction ~= "neutral" and intendedDir == "neutral" then
+		-- if intention is to stop, slow down (also spend stationary 'momentum')
+		if intendedDir == "neutral" then
 			player.speed = player.speed - playerSpeedDecrement
 			if player.speed <= 0 then
 				player.speed = 0
@@ -166,11 +165,33 @@ function Level:step()
 		end
 		-- check for collision
 		if self:blockCollision(projection) then
-			player.speed = 0
+			--player.speed = 0
+			if     player.direction == "up" then
+				player.y = g_tileSize * math.floor(player.y/g_tileSize)
+			elseif player.direction == "down" then
+				player.y = g_tileSize * math.ceil(player.y/g_tileSize) - player.h - 0.0000001
+			elseif player.direction == "left" then
+				player.x = g_tileSize * math.floor(player.x/g_tileSize)
+			elseif player.direction == "right" then
+				player.x = g_tileSize * math.ceil(player.x/g_tileSize) - player.w - 0.0000001
+			end
 			player.direction = "neutral"
 		else
 			player.x, player.y = projection.x, projection.y
 		end
+	end
+
+	-- keep view in a deadzone of the player
+	local viewCentreX = player.x - 0.5*g_defaultWidth
+	local viewCentreY = player.y - 0.5*g_defaultHeight
+	if     g_viewX < viewCentreX - viewDeadzoneX then
+		g_viewX = viewCentreX - viewDeadzoneX
+	elseif g_viewX > viewCentreX + viewDeadzoneX then
+		g_viewX = viewCentreX + viewDeadzoneX
+	elseif g_viewY < viewCentreY - viewDeadzoneY then
+		g_viewY = viewCentreY - viewDeadzoneY
+	elseif g_viewY > viewCentreY + viewDeadzoneY then
+		g_viewY = viewCentreY + viewDeadzoneY
 	end
 end
 
