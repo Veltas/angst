@@ -26,6 +26,10 @@ end
 
 local dtotal = 0
 function love.update(dt)
+	-- if user presses Esc then quit
+	if love.keyboard.isScancodeDown('escape', 'q') then
+		love.event.quit()
+	end
 	-- Limit to 1/30 updates
 	dtotal = dtotal + dt
 	if dtotal >= 1/30 then
