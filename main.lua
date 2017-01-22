@@ -13,7 +13,7 @@ function love.load()
 
 	require("levels")
 
-	g_currentLevel = Level:new{source = g_levelData1}
+	g_currentLevel = Level:new{source = g_levelData1, extra = g_levelExtra1}
 end
 
 function love.resize(w, h)

@@ -23,11 +23,50 @@ Level.player = nil
 --Level.start = nil
 --Level.finishes = nil
 
+function Level:loadItem(c, i, j)
+	local wallGrid = self.wallGrid
+	local pathGrid = self.pathGrid
+	-- assign grid values
+	wallGrid[j][i] = not not (c == TileTypes.wall)
+	pathGrid[j][i] =
+		({
+			[">"] = "right",
+			["<"] = "left",
+			["^"] = "up",
+			["v"] = "down",
+			["V"] = "down",
+		})[c] or false
+	-- detect player / enemies
+	if     c == TileTypes.start then
+		assert(not self.player)
+		self.player = {
+			x = g_tileSize * (i - 1) + (g_tileSize - playerW)/2,
+			y = g_tileSize * (j - 1) + (g_tileSize - playerH)/2,
+			w = playerW,
+			h = playerH,
+			direction = "neutral",
+			speed = 0,
+		}
+	elseif c == TileTypes.enemy then
+		table.insert(self.enemies, {
+			x = g_tileSize * (i - 1) + (g_tileSize - enemyW)/2,
+			y = g_tileSize * (j - 1) + (g_tileSize - enemyH)/2,
+			w = enemyW,
+			h = enemyH,
+			direction = "neutral",
+			speed = enemyPatrolSpeed,
+			mode = "patrol",
+		})
+	end
+end
+
 function Level:new(tab)
 	tab = tab or {}
 	setmetatable(tab, {__index = self})
 
 	love.mouse.setVisible(false)
+
+	assert(type(tab.extra) == "table")
 
 	-- list lines
 	assert(type(tab.source) == "string")
@@ -49,53 +88,22 @@ function Level:new(tab)
 		assert(#lines[i] == tab.gridWidth)
 	end
 	-- load data
-	local wallGrid = {}
-	local pathGrid = {}
-	local enemies = {}
+	tab.wallGrid = {}
+	tab.pathGrid = {}
+	tab.enemies = {}
 	for j, line in ipairs(lines) do
-		table.insert(wallGrid, {})
-		table.insert(pathGrid, {})
+		tab.wallGrid[j] = {}
+		tab.pathGrid[j] = {}
 		for i = 1, #line do
-			local c = line:sub(i, i)
-			-- assign grid values
-			wallGrid[j][i] = not not (c == TileTypes.wall)
-			pathGrid[j][i] =
-				({
-					[">"] = "right",
-					["<"] = "left",
-					["^"] = "up",
-					["v"] = "down",
-					["V"] = "down",
-				})[c] or false
-			-- detect player / enemies
-			if     c == TileTypes.start then
-				assert(not tab.player)
-				tab.player = {
-					x = g_tileSize * (i - 1) + (g_tileSize - playerW)/2,
-					y = g_tileSize * (j - 1) + (g_tileSize - playerH)/2,
-					w = playerW,
-					h = playerH,
-					direction = "neutral",
-					speed = 0,
-				}
-			elseif c == TileTypes.enemy then
-				table.insert(enemies, {
-					x = g_tileSize * (i - 1) + (g_tileSize - enemyW)/2,
-					y = g_tileSize * (j - 1) + (g_tileSize - enemyH)/2,
-					w = enemyW,
-					h = enemyH,
-					direction = "neutral",
-					speed = enemyPatrolSpeed,
-					mode = "patrol",
-				})
-			end
+			tab:loadItem(line:sub(i, i), i, j)
 		end
 	end
+	for _, extra in ipairs(tab.extra) do
+		tab:loadItem(extra[1], extra[2], extra[3])
+	end
 	assert(tab.player)
-	setmetatable(wallGrid, {__index = function () return {} end})
-	setmetatable(pathGrid, {__index = function () return {} end})
-	tab.wallGrid = wallGrid
-	tab.enemies = enemies
+	setmetatable(tab.wallGrid, {__index = function () return {} end})
+	setmetatable(tab.pathGrid, {__index = function () return {} end})
 
 	-- start view on player
 	g_viewX, g_viewY = tab.player.x - 0.5*g_defaultWidth, tab.player.y - 0.5*g_defaultHeight
@@ -254,6 +262,18 @@ function Level:step()
 	-- move enemies
 	for _, enemy in pairs(self.enemies) do
 		self:motion(enemy, true)
+		-- redirect on path cells
+		local redirect = self:gridCollision(self.pathGrid, enemy)
+		if redirect then
+			-- confirm enemy is in an appropriate position to redirect!
+			local modX = enemy.x % g_tileSize
+			local modY = enemy.y % g_tileSize
+			local xCheck = 0 <= modX and modX <= 0.5*(g_tileSize-enemy.w)
+			local yCheck = 0 <= modY and modY <= 0.5*(g_tileSize-enemy.h)
+			if xCheck and yCheck then
+				enemy.direction = redirect
+			end
+		end
 	end
 
 	-- keep view in a deadzone of the player
