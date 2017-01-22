@@ -48,21 +48,26 @@ function Level:new(tab)
 	for i = 2, #lines do
 		assert(#lines[i] == tab.gridWidth)
 	end
-	-- assign wall grid
+	-- load data
 	local wallGrid = {}
-	for j, line in ipairs(lines) do
-		table.insert(wallGrid, {})
-		for i = 1, #line do
-			table.insert(wallGrid[j], not not (line:sub(i, i) == TileTypes.wall))
-		end
-	end
-	setmetatable(wallGrid, {__index = function () return {} end})
-	tab.wallGrid = wallGrid
-	-- add player and enemies
+	local pathGrid = {}
 	local enemies = {}
 	for j, line in ipairs(lines) do
+		table.insert(wallGrid, {})
+		table.insert(pathGrid, {})
 		for i = 1, #line do
 			local c = line:sub(i, i)
+			-- assign grid values
+			wallGrid[j][i] = not not (c == TileTypes.wall)
+			pathGrid[j][i] =
+				({
+					[">"] = "right",
+					["<"] = "left",
+					["^"] = "up",
+					["v"] = "down",
+					["V"] = "down",
+				})[c] or false
+			-- detect player / enemies
 			if     c == TileTypes.start then
 				assert(not tab.player)
 				tab.player = {
@@ -79,7 +84,7 @@ function Level:new(tab)
 					y = g_tileSize * (j - 1) + (g_tileSize - enemyH)/2,
 					w = enemyW,
 					h = enemyH,
-					direction = "down",
+					direction = "neutral",
 					speed = enemyPatrolSpeed,
 					mode = "patrol",
 				})
@@ -87,6 +92,9 @@ function Level:new(tab)
 		end
 	end
 	assert(tab.player)
+	setmetatable(wallGrid, {__index = function () return {} end})
+	setmetatable(pathGrid, {__index = function () return {} end})
+	tab.wallGrid = wallGrid
 	tab.enemies = enemies
 
 	-- start view on player
@@ -95,31 +103,30 @@ function Level:new(tab)
 	return tab
 end
 
-function Level:blockCollision(tab)
+function Level:gridCollision(grid, tab)
 	assert(tab and type(tab) == "table" and tab.x and tab.y and tab.w and tab.h)
 	local tlCornerX, tlCornerY = math.floor(tab.x / g_tileSize) + 1, math.floor(tab.y / g_tileSize) + 1
 	local brCornerX, brCornerY = math.floor((tab.x + tab.w) / g_tileSize) + 1, math.floor((tab.y + tab.h) / g_tileSize) + 1
 
-	local wallGrid = self.wallGrid
 	if tlCornerY == brCornerY then
 		-- if TL-corner and BR-corner are the same tile then single collision check
 		if tlCornerX == brCornerX then
-			return wallGrid[tlCornerY][tlCornerX]
+			return grid[tlCornerY][tlCornerX]
 		-- X different, check two tiles
 		else
-			return wallGrid[tlCornerY][tlCornerX] or wallGrid[tlCornerY][tlCornerX+1]
+			return grid[tlCornerY][tlCornerX] or grid[tlCornerY][tlCornerX+1]
 		end
 	else
 		-- if TL-corner and BR-corner are different we get to do 4 collision checks JOY
 		if tlCornerX ~= brCornerX then
 			return
-				wallGrid[tlCornerY][tlCornerX]     or
-				wallGrid[tlCornerY+1][tlCornerX]   or
-				wallGrid[tlCornerY][tlCornerX+1]   or
-				wallGrid[tlCornerY+1][tlCornerX+1]
+				grid[tlCornerY][tlCornerX]     or
+				grid[tlCornerY+1][tlCornerX]   or
+				grid[tlCornerY][tlCornerX+1]   or
+				grid[tlCornerY+1][tlCornerX+1]
 		-- just Y different, check two tiles
 		else
-			return wallGrid[tlCornerY][tlCornerX] or wallGrid[tlCornerY+1][tlCornerX]
+			return grid[tlCornerY][tlCornerX] or grid[tlCornerY+1][tlCornerX]
 		end
 	end
 end
@@ -160,7 +167,7 @@ function Level:motion(tab, autoReflect)
 			projection.y = tab.y
 		end
 		-- check for collision
-		if self:blockCollision(projection) then
+		if self:gridCollision(self.wallGrid, projection) then
 			local gridX, gridY
 			if autoReflect then
 				gridX = math.floor((tab.x+0.5*tab.w)/g_tileSize) + 1
