@@ -4,6 +4,7 @@ function love.load()
 	require("global")
 
 	g_currentFont = love.graphics.newFont("assets/PressStart2P.ttf", 30)
+	g_currentSmallFont = love.graphics.newFont("assets/PressStart2P.ttf", 20)
 
 	love.window.setMode(g_defaultWidth, g_defaultHeight, {
 		fullscreen = true,
@@ -41,12 +42,18 @@ function love.update(dt)
 	-- If level completed load and begin next level
 	if g_currentLevel.success then
 		g_currentLevelN = g_currentLevelN + 1
-		g_currentLevel = Level:new{
-			source = _G["g_levelData"..g_currentLevelN],
-			extra  = _G["g_levelExtra"..g_currentLevelN],
-		}
+		local newSource = _G["g_levelData"..g_currentLevelN]
+		local newExtra = _G["g_levelExtra"..g_currentLevelN]
+		if not newSource then
+			g_gameComplete = true
+		else
+			g_currentLevel = Level:new{source = newSource, extra = newExtra}
+		end
 	end
-	g_currentLevel:step()
+
+	if not g_gameComplete then
+		g_currentLevel:step()
+	end
 end
 
 function love.draw()
@@ -78,7 +85,11 @@ function love.draw()
 	love.graphics.push()
 	love.graphics.scale(aScale, aScale)
 
-	if g_currentLevel then
+	if g_gameComplete then
+		love.graphics.setColor(0,0,0)
+		love.graphics.setFont(g_currentSmallFont)
+		love.graphics.print("thanks for playing :)", 10, 100)
+	else
 		g_currentLevel:draw()
 	end
 
