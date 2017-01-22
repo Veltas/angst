@@ -35,6 +35,7 @@ Level.gameOver = false
 Level.finishes = nil
 Level.success = false
 Level.keys = nil
+Level.previousProximity = false
 
 function Level:loadItem(c, i, j)
 	local wallGrid = self.wallGrid
@@ -309,9 +310,14 @@ function Level:step()
 
 	-- if we hit finish tile ... success (if no keys left)
 	for _, finish in pairs(self.finishes) do
-		if self:boxCollision(player, finish) and not next(self.keys) then
-			self.success = true
-			break
+		if self:boxCollision(player, finish) then
+			if not next(self.keys) then
+				love.audio.play(g_sounds.complete)
+				self.success = true
+				break
+			else
+				love.audio.play(g_sounds.notComplete)
+			end
 		end
 	end
 
@@ -321,6 +327,7 @@ function Level:step()
 		local key = self.keys[i]
 		if self:boxCollision(player, key) then
 			table.remove(self.keys, i)
+			love.audio.play(g_sounds.collect)
 		else
 			i = i + 1
 		end
@@ -335,10 +342,15 @@ function Level:step()
 	end
 	if closeProximity then
 		player.health = player.health - hurtSpeed
+		if not self.previousProximity and not self.gameOver then
+			love.audio.play(g_sounds.spotted)
+		end
 		if player.health <= 0 then
 			player.health = 0
 			self.gameOver = true
 		end
+	else
+		previousProximity = false
 	end
 
 	-- keep view in a deadzone of the player

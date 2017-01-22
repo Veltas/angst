@@ -17,6 +17,8 @@ g_currentLevelN = 1
 
 g_gameComplete = false
 
+g_Sounds = nil
+
 function xc(coord)
 	return g_windowWidth / g_defaultWidth * coord
 end

@@ -6,6 +6,25 @@ function love.load()
 	g_currentFont = love.graphics.newFont("assets/PressStart2P.ttf", 30)
 	g_currentSmallFont = love.graphics.newFont("assets/PressStart2P.ttf", 20)
 
+	g_sounds = {
+		start = love.audio.newSource("assets/UI_E.wav"),
+		collect = love.audio.newSource("assets/UI_D.wav"),
+		spotted = love.audio.newSource("assets/SpottedAlert.wav"),
+		complete = love.audio.newSource("assets/CheckoutBeep.wav"),
+		notComplete = love.audio.newSource("assets/UI_A.wav"),
+		footsteps = {
+			love.audio.newSource("assets/TileFootsteps-1.wav"),
+			love.audio.newSource("assets/TileFootsteps-2.wav"),
+			love.audio.newSource("assets/TileFootsteps-3.wav"),
+			love.audio.newSource("assets/TileFootsteps-4.wav"),
+			love.audio.newSource("assets/TileFootsteps-5.wav"),
+			love.audio.newSource("assets/TileFootsteps-6.wav"),
+			love.audio.newSource("assets/TileFootsteps-7.wav"),
+			love.audio.newSource("assets/TileFootsteps-8.wav"),
+		},
+		heartbeat = love.audio.newSource("assets/Heartbeat.wav"),
+	}
+
 	love.window.setMode(g_defaultWidth, g_defaultHeight, {
 		fullscreen = true,
 		fullscreentype = "desktop",
@@ -19,6 +38,7 @@ function love.load()
 	require("levels")
 
 	g_currentLevel = Level:new{source = g_levelData1, extra = g_levelExtra1}
+	love.audio.play(g_sounds.start)
 end
 
 function love.resize(w, h)
