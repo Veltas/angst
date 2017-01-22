@@ -326,14 +326,18 @@ function Level:step()
 		end
 	end
 
-	-- check player proximity to enemies
+	-- check if player is in proximity to enemies
+	local closeProximity = false
 	for _, enemy in pairs(self.enemies) do
 		if math.sqrt((player.x - enemy.x)^2 + (player.y - enemy.y)^2) < shyDistance then
-			player.health = player.health - hurtSpeed
-			if player.health <= 0 then
-				player.health = 0
-				self.gameOver = true
-			end
+			closeProximity = true
+		end
+	end
+	if closeProximity then
+		player.health = player.health - hurtSpeed
+		if player.health <= 0 then
+			player.health = 0
+			self.gameOver = true
 		end
 	end
 
