@@ -421,6 +421,8 @@ function Level:draw()
 		love.graphics.setColor(0, 0, 0)
 		love.graphics.setFont(g_currentFont)
 		love.graphics.print("GAME OVER", g_defaultWidth*.5 - 133, g_defaultHeight*.5 - 20, 0, 1, 1)
+		love.graphics.setFont(g_currentTinyFont)
+		love.graphics.print("Press R to restart level", g_defaultWidth*.5 - 90, g_defaultHeight*.5 + 10, 0, 1, 1)
 	end
 end
 

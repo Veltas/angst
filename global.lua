@@ -12,6 +12,7 @@ g_currentLevel = nil
 
 g_currentFont = nil
 g_currentSmallFont = nil
+g_currentTinyFont = nil
 
 g_currentLevelN = 1
 

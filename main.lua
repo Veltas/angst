@@ -5,6 +5,7 @@ function love.load()
 
 	g_currentFont = love.graphics.newFont("assets/PressStart2P.ttf", 30)
 	g_currentSmallFont = love.graphics.newFont("assets/PressStart2P.ttf", 20)
+	g_currentTinyFont = love.graphics.newFont("assets/PressStart2P.ttf", 8)
 
 	g_sounds = {
 		start = love.audio.newSource("assets/UI_E.wav"),
@@ -48,7 +49,7 @@ end
 local dtotal = 0
 function love.update(dt)
 	-- if user presses Esc then quit
-	if love.keyboard.isScancodeDown('escape', 'q') then
+	if love.keyboard.isScancodeDown('escape') or love.keyboard.isDown('q') then
 		love.event.quit()
 	end
 	-- Limit to 1/30 updates
@@ -71,6 +72,10 @@ function love.update(dt)
 		end
 	end
 
+	-- If level restart requested then restart the level
+	if love.keyboard.isDown('r') then
+		g_currentLevel = Level:new{source = g_currentLevel.source, extra = g_currentLevel.extra}
+	end
 	if not g_gameComplete then
 		g_currentLevel:step()
 	end
