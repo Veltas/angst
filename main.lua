@@ -3,13 +3,17 @@ local Level = require("game.Level")
 function love.load()
 	require("global")
 
+	g_currentFont = love.graphics.newFont("assets/PressStart2P.ttf", 30)
+
 	love.window.setMode(g_defaultWidth, g_defaultHeight, {
 		fullscreen = true,
 		fullscreentype = "desktop",
 	})
 	love.resize(love.window.getMode())
 	love.graphics.setDefaultFilter("linear", "nearest", 0)
-	love.graphics.setBackgroundColor(240, 240, 230)
+	love.graphics.setBackgroundColor(240, 240, 200)
+
+	love.graphics.setFont(g_currentFont)
 
 	require("levels")
 
@@ -29,9 +33,16 @@ function love.update(dt)
 	else
 		return
 	end
-	if g_currentLevel then
-		g_currentLevel:step()
+
+	-- If level completed load and begin next level
+	if g_currentLevel.success then
+		g_currentLevelN = g_currentLevelN + 1
+		g_currentLevel = Level:new{
+			source = _G["g_levelData"..g_currentLevelN],
+			extra  = _G["g_levelExtra"..g_currentLevelN],
+		}
 	end
+	g_currentLevel:step()
 end
 
 function love.draw()
@@ -62,14 +73,11 @@ function love.draw()
 	love.graphics.translate(screenX, screenY)
 	love.graphics.push()
 	love.graphics.scale(aScale, aScale)
-	love.graphics.push()
-	love.graphics.translate(-g_viewX, -g_viewY)
 
 	if g_currentLevel then
 		g_currentLevel:draw()
 	end
 
-	love.graphics.pop()
 	love.graphics.pop()
 	love.graphics.pop()
 	love.graphics.setColor(0, 0, 0)

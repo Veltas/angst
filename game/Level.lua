@@ -2,6 +2,7 @@ local TileTypes = {
 	wall = "#",
 	start = "S",
 	enemy = "A",
+	finish = "F",
 }
 
 local enemyPatrolSpeed = 3.5
@@ -9,6 +10,14 @@ local enemyChaseSpeed = 3
 
 local playerW, playerH = 20, 20
 local enemyW, enemyH = 20, 20
+
+local maxPlayerSpeed = 3
+local playerSpeedIncrement = 0.5
+local playerSpeedDecrement = 1
+local viewDeadzoneX = 15
+local viewDeadzoneY = 10
+local shyDistance = 75
+local hurtSpeed = 2.0
 
 local Level = {}
 Level.Level = true
@@ -20,12 +29,14 @@ Level.enemies = nil
 Level.wallGrid = nil
 Level.pathGrid = nil
 Level.player = nil
---Level.start = nil
---Level.finishes = nil
+Level.gameOver = false
+Level.finishes = nil
+Level.success = false
 
 function Level:loadItem(c, i, j)
 	local wallGrid = self.wallGrid
 	local pathGrid = self.pathGrid
+	local finishes = self.finishes
 	-- assign grid values
 	wallGrid[j][i] = not not (c == TileTypes.wall)
 	pathGrid[j][i] =
@@ -46,6 +57,7 @@ function Level:loadItem(c, i, j)
 			h = playerH,
 			direction = "neutral",
 			speed = 0,
+			health = 100
 		}
 	elseif c == TileTypes.enemy then
 		table.insert(self.enemies, {
@@ -56,6 +68,13 @@ function Level:loadItem(c, i, j)
 			direction = "neutral",
 			speed = enemyPatrolSpeed,
 			mode = "patrol",
+		})
+	elseif c == TileTypes.finish then
+		table.insert(finishes, {
+			x = g_tileSize * (i - 1) + (g_tileSize - enemyW)/2,
+			y = g_tileSize * (j - 1) + (g_tileSize - enemyH)/2,
+			w = g_tileSize,
+			h = g_tileSize,
 		})
 	end
 end
@@ -91,6 +110,7 @@ function Level:new(tab)
 	tab.wallGrid = {}
 	tab.pathGrid = {}
 	tab.enemies = {}
+	tab.finishes = {}
 	for j, line in ipairs(lines) do
 		tab.wallGrid[j] = {}
 		tab.pathGrid[j] = {}
@@ -139,20 +159,25 @@ function Level:gridCollision(grid, tab)
 	end
 end
 
-function Level:boxCollision(b1, b2)
-	local vertTrapped = false
-	if b1.x < b2.x and b2.x < b1.x+b1.w then
-		vertTrapped = true
-	elseif b1.x < b2.x+b2.w and b2.x+b2.w < b1.x+b1.w then
-		vertTrapped = true
+function Level:boxCollision(b1, b2, isNestedInv)
+	-- top left b1
+	if b2.x <= b1.x and b1.x <= b2.x+b2.w and b2.y <= b1.y and b1.y <= b2.y+b2.h then
+		return true
+	-- top right b1
+	elseif b2.x <= b1.x+b1.w and b1.x+b1.w <= b2.x+b2.w and b2.y <= b1.y and b1.y <= b2.y+b2.h then
+		return true
+	-- bottom left b1
+	elseif b2.x <= b1.x and b1.x <= b2.x+b2.w and b2.y <= b1.y+b1.h and b1.y+b1.h <= b2.y+b2.h then
+		return true
+	-- bottom right b1
+	elseif b2.x <= b1.x+b1.w and b1.x+b1.w <= b2.x+b2.w and b2.y <= b1.y+b1.h and b1.y+b1.h <= b2.y+b2.h then
+		return true
 	end
-	if vertTrapped then
-		if b1.y < b2.y and b2.y < b1.y+b1.h then
-			return true
-		elseif b1.y < b2.y+b2.h and b2.y+b2.h < b1.y+b1.h then
-			return true
-		end
+	-- test b2's corners instead
+	if not isNestedInv then
+		return self:boxCollision(b2, b1, true)
 	end
+	-- otherwise no intersection
 	return false
 end
 
@@ -191,14 +216,12 @@ function Level:motion(tab, autoReflect)
 				tab.x = g_tileSize * math.ceil(tab.x/g_tileSize) - tab.w - 0.0000001
 			end
 			if autoReflect and (tab.direction == "up" or tab.direction == "down") then
-				print("up/down", gridX, gridY)
 				if self.wallGrid[gridY][gridX-1] and not self.wallGrid[gridY][gridX+1] then
 					tab.direction = "right"
 				elseif self.wallGrid[gridY][gridX+1] and not self.wallGrid[gridY][gridX-1] then
 					tab.direction = "left"
 				end
 			elseif autoReflect and (tab.direction == "left" or tab.direction == "right") then
-				print("left/right", gridX, gridY)
 				if self.wallGrid[gridY+1][gridX] and not self.wallGrid[gridY-1][gridX] then
 					tab.direction = "up"
 				elseif self.wallGrid[gridY-1][gridX] and not self.wallGrid[gridY+1][gridX] then
@@ -211,26 +234,22 @@ function Level:motion(tab, autoReflect)
 	end
 end
 
-local maxPlayerSpeed = 3
-local playerSpeedIncrement = 0.5
-local playerSpeedDecrement = 1
-local viewDeadzoneX = 15
-local viewDeadzoneY = 10
-
 function Level:step()
 	local player = self.player
 
-	-- handle user movement input
+	-- handle user movement input (while game not over)
 	-- determine intended direction
 	local intendedDir = "neutral"
-	if     love.keyboard.isScancodeDown('a', 'left') then
-		intendedDir = "left"
-	elseif love.keyboard.isScancodeDown('d', 'right') then
-		intendedDir = "right"
-	elseif love.keyboard.isScancodeDown('w', 'up') then
-		intendedDir = "up"
-	elseif love.keyboard.isScancodeDown('s', 'down') then
-		intendedDir = "down"
+	if not self.gameOver then
+		if     love.keyboard.isScancodeDown('a', 'left') then
+			intendedDir = "left"
+		elseif love.keyboard.isScancodeDown('d', 'right') then
+			intendedDir = "right"
+		elseif love.keyboard.isScancodeDown('w', 'up') then
+			intendedDir = "up"
+		elseif love.keyboard.isScancodeDown('s', 'down') then
+			intendedDir = "down"
+		end
 	end
 	if intendedDir ~= player.direction then
 		-- if intention is to stop, slow down (also spend stationary 'momentum')
@@ -276,6 +295,25 @@ function Level:step()
 		end
 	end
 
+	-- if we hit finish tile ... success!
+	for _, finish in pairs(self.finishes) do
+		if self:boxCollision(player, finish) then
+			self.success = true
+			break
+		end
+	end
+
+	-- check player proximity to enemies
+	for _, enemy in pairs(self.enemies) do
+		if math.sqrt((player.x - enemy.x)^2 + (player.y - enemy.y)^2) < shyDistance then
+			player.health = player.health - hurtSpeed
+			if player.health <= 0 then
+				player.health = 0
+				self.gameOver = true
+			end
+		end
+	end
+
 	-- keep view in a deadzone of the player
 	local viewCentreX = player.x - 0.5*g_defaultWidth
 	local viewCentreY = player.y - 0.5*g_defaultHeight
@@ -291,6 +329,9 @@ function Level:step()
 end
 
 function Level:draw()
+	love.graphics.push()
+	love.graphics.translate(-g_viewX, -g_viewY)
+
 	-- draw walls
 	love.graphics.setColor(40, 40, 40)
 	local wallGrid = self.wallGrid
@@ -300,6 +341,12 @@ function Level:draw()
 				love.graphics.rectangle("fill", (i - 1) * g_tileSize, (j - 1) * g_tileSize, g_tileSize, g_tileSize)
 			end
 		end
+	end
+
+	-- draw finishes
+	love.graphics.setColor(0, 200, 0)
+	for _, finish in pairs(self.finishes) do
+		love.graphics.rectangle("fill", finish.x, finish.y, finish.w, finish.h)
 	end
 
 	-- draw player
@@ -312,6 +359,22 @@ function Level:draw()
 	local enemies = self.enemies
 	for _, enemy in pairs(enemies) do
 		love.graphics.rectangle("fill", enemy.x, enemy.y, enemy.w, enemy.h)
+	end
+
+	love.graphics.pop()
+
+	-- draw hurtangle
+	love.graphics.setColor(255, 0, 0, 100 - self.player.health)
+	love.graphics.rectangle("fill", 0, 0, g_defaultWidth, g_defaultHeight)
+
+	-- draw meter
+	love.graphics.setColor(255, 0, 0)
+	love.graphics.rectangle("fill", 20, 20, 0.01 * (100 - player.health) * (g_defaultWidth - 40), 10)
+
+	-- draw GAME OVER
+	if self.gameOver then
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.print("GAME OVER", g_defaultWidth*.5 - 133, g_defaultHeight*.5 - 20, 0, 1, 1)
 	end
 end
 
