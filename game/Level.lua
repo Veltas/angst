@@ -3,6 +3,7 @@ local TileTypes = {
 	start = "S",
 	enemy = "A",
 	finish = "F",
+	key = "k",
 }
 
 local enemyPatrolSpeed = 3.5
@@ -10,6 +11,7 @@ local enemyChaseSpeed = 3
 
 local playerW, playerH = 20, 20
 local enemyW, enemyH = 20, 20
+local keyW, keyH = 10, 10
 
 local maxPlayerSpeed = 3
 local playerSpeedIncrement = 0.5
@@ -32,11 +34,13 @@ Level.player = nil
 Level.gameOver = false
 Level.finishes = nil
 Level.success = false
+Level.keys = nil
 
 function Level:loadItem(c, i, j)
 	local wallGrid = self.wallGrid
 	local pathGrid = self.pathGrid
 	local finishes = self.finishes
+	local keys = self.keys
 	-- assign grid values
 	wallGrid[j][i] = not not (c == TileTypes.wall)
 	pathGrid[j][i] =
@@ -71,10 +75,17 @@ function Level:loadItem(c, i, j)
 		})
 	elseif c == TileTypes.finish then
 		table.insert(finishes, {
-			x = g_tileSize * (i - 1) + (g_tileSize - enemyW)/2,
-			y = g_tileSize * (j - 1) + (g_tileSize - enemyH)/2,
+			x = g_tileSize * (i - 1),
+			y = g_tileSize * (j - 1),
 			w = g_tileSize,
 			h = g_tileSize,
+		})
+	elseif c == TileTypes.key then
+		table.insert(keys, {
+			x = g_tileSize * (i - 1) + (g_tileSize - keyW)/2,
+			y = g_tileSize * (j - 1) + (g_tileSize - keyH)/2,
+			w = keyW,
+			h = keyH,
 		})
 	end
 end
@@ -111,6 +122,7 @@ function Level:new(tab)
 	tab.pathGrid = {}
 	tab.enemies = {}
 	tab.finishes = {}
+	tab.keys = {}
 	for j, line in ipairs(lines) do
 		tab.wallGrid[j] = {}
 		tab.pathGrid[j] = {}
@@ -295,11 +307,22 @@ function Level:step()
 		end
 	end
 
-	-- if we hit finish tile ... success!
+	-- if we hit finish tile ... success (if no keys left)
 	for _, finish in pairs(self.finishes) do
-		if self:boxCollision(player, finish) then
+		if self:boxCollision(player, finish) and not next(self.keys) then
 			self.success = true
 			break
+		end
+	end
+
+	-- if we hit a key we should absorb it
+	local i = 1
+	while i <= #self.keys do
+		local key = self.keys[i]
+		if self:boxCollision(player, key) then
+			table.remove(self.keys, i)
+		else
+			i = i + 1
 		end
 	end
 
@@ -347,6 +370,12 @@ function Level:draw()
 	love.graphics.setColor(0, 200, 0)
 	for _, finish in pairs(self.finishes) do
 		love.graphics.rectangle("fill", finish.x, finish.y, finish.w, finish.h)
+	end
+
+	-- draw keys
+	love.graphics.setColor(0, 100, 200)
+	for _, key in pairs(self.keys) do
+		love.graphics.rectangle("fill", key.x, key.y, key.w, key.h)
 	end
 
 	-- draw player
