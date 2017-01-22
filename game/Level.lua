@@ -1,7 +1,14 @@
 local TileTypes = {
 	wall = "#",
 	start = "S",
+	enemy = "A",
 }
+
+local enemyPatrolSpeed = 3.5
+local enemyChaseSpeed = 3
+
+local playerW, playerH = 20, 20
+local enemyW, enemyH = 20, 20
 
 local Level = {}
 Level.Level = true
@@ -9,8 +16,9 @@ Level.Level = true
 Level.gridWidth = 0
 Level.gridHeight = 0
 Level.source = nil
---Level.enemies = nil
+Level.enemies = nil
 Level.wallGrid = nil
+Level.pathGrid = nil
 Level.player = nil
 --Level.start = nil
 --Level.finishes = nil
@@ -18,6 +26,8 @@ Level.player = nil
 function Level:new(tab)
 	tab = tab or {}
 	setmetatable(tab, {__index = self})
+
+	love.mouse.setVisible(false)
 
 	-- list lines
 	assert(type(tab.source) == "string")
@@ -48,23 +58,36 @@ function Level:new(tab)
 	end
 	setmetatable(wallGrid, {__index = function () return {} end})
 	tab.wallGrid = wallGrid
-	-- add player
+	-- add player and enemies
+	local enemies = {}
 	for j, line in ipairs(lines) do
 		for i = 1, #line do
-			if line:sub(i, i) == TileTypes.start then
+			local c = line:sub(i, i)
+			if     c == TileTypes.start then
 				assert(not tab.player)
 				tab.player = {
-					x = g_tileSize * (i - 1),
-					y = g_tileSize * (j - 1),
-					w = 20,
-					h = 20,
+					x = g_tileSize * (i - 1) + (g_tileSize - playerW)/2,
+					y = g_tileSize * (j - 1) + (g_tileSize - playerH)/2,
+					w = playerW,
+					h = playerH,
 					direction = "neutral",
-					speed = 0
+					speed = 0,
 				}
+			elseif c == TileTypes.enemy then
+				table.insert(enemies, {
+					x = g_tileSize * (i - 1) + (g_tileSize - enemyW)/2,
+					y = g_tileSize * (j - 1) + (g_tileSize - enemyH)/2,
+					w = enemyW,
+					h = enemyH,
+					direction = "down",
+					speed = enemyPatrolSpeed,
+					mode = "patrol",
+				})
 			end
 		end
 	end
 	assert(tab.player)
+	tab.enemies = enemies
 
 	-- start view on player
 	g_viewX, g_viewY = tab.player.x - 0.5*g_defaultWidth, tab.player.y - 0.5*g_defaultHeight
@@ -97,6 +120,78 @@ function Level:blockCollision(tab)
 		-- just Y different, check two tiles
 		else
 			return wallGrid[tlCornerY][tlCornerX] or wallGrid[tlCornerY+1][tlCornerX]
+		end
+	end
+end
+
+function Level:boxCollision(b1, b2)
+	local vertTrapped = false
+	if b1.x < b2.x and b2.x < b1.x+b1.w then
+		vertTrapped = true
+	elseif b1.x < b2.x+b2.w and b2.x+b2.w < b1.x+b1.w then
+		vertTrapped = true
+	end
+	if vertTrapped then
+		if b1.y < b2.y and b2.y < b1.y+b1.h then
+			return true
+		elseif b1.y < b2.y+b2.h and b2.y+b2.h < b1.y+b1.h then
+			return true
+		end
+	end
+	return false
+end
+
+function Level:motion(tab, autoReflect)
+	-- handle entity velocity
+	if tab.direction ~= "neutral" then
+		-- find projected position
+		local projection = {w = tab.w, h = tab.h}
+		if     tab.direction == "up" then
+			projection.x = tab.x
+			projection.y = tab.y - tab.speed
+		elseif tab.direction == "down" then
+			projection.x = tab.x
+			projection.y = tab.y + tab.speed
+		elseif tab.direction == "left" then
+			projection.x = tab.x - tab.speed
+			projection.y = tab.y
+		elseif tab.direction == "right" then
+			projection.x = tab.x + tab.speed
+			projection.y = tab.y
+		end
+		-- check for collision
+		if self:blockCollision(projection) then
+			local gridX, gridY
+			if autoReflect then
+				gridX = math.floor((tab.x+0.5*tab.w)/g_tileSize) + 1
+				gridY = math.floor((tab.y+0.5*tab.h)/g_tileSize) + 1
+			end
+			if     tab.direction == "up" then
+				tab.y = g_tileSize * math.floor(tab.y/g_tileSize)
+			elseif tab.direction == "down" then
+				tab.y = g_tileSize * math.ceil(tab.y/g_tileSize) - tab.h - 0.0000001
+			elseif tab.direction == "left" then
+				tab.x = g_tileSize * math.floor(tab.x/g_tileSize)
+			elseif tab.direction == "right" then
+				tab.x = g_tileSize * math.ceil(tab.x/g_tileSize) - tab.w - 0.0000001
+			end
+			if autoReflect and (tab.direction == "up" or tab.direction == "down") then
+				print("up/down", gridX, gridY)
+				if self.wallGrid[gridY][gridX-1] and not self.wallGrid[gridY][gridX+1] then
+					tab.direction = "right"
+				elseif self.wallGrid[gridY][gridX+1] and not self.wallGrid[gridY][gridX-1] then
+					tab.direction = "left"
+				end
+			elseif autoReflect and (tab.direction == "left" or tab.direction == "right") then
+				print("left/right", gridX, gridY)
+				if self.wallGrid[gridY+1][gridX] and not self.wallGrid[gridY-1][gridX] then
+					tab.direction = "up"
+				elseif self.wallGrid[gridY-1][gridX] and not self.wallGrid[gridY+1][gridX] then
+					tab.direction = "down"
+				end
+			end
+		else
+			tab.x, tab.y = projection.x, projection.y
 		end
 	end
 end
@@ -147,38 +242,11 @@ function Level:step()
 	end
 
 	-- handle player velocity
-	if player.direction ~= "neutral" then
-		-- find projected position
-		local projection = {w = player.w, h = player.h}
-		if     player.direction == "up" then
-			projection.x = player.x
-			projection.y = player.y - player.speed
-		elseif player.direction == "down" then
-			projection.x = player.x
-			projection.y = player.y + player.speed
-		elseif player.direction == "left" then
-			projection.x = player.x - player.speed
-			projection.y = player.y
-		elseif player.direction == "right" then
-			projection.x = player.x + player.speed
-			projection.y = player.y
-		end
-		-- check for collision
-		if self:blockCollision(projection) then
-			--player.speed = 0
-			if     player.direction == "up" then
-				player.y = g_tileSize * math.floor(player.y/g_tileSize)
-			elseif player.direction == "down" then
-				player.y = g_tileSize * math.ceil(player.y/g_tileSize) - player.h - 0.0000001
-			elseif player.direction == "left" then
-				player.x = g_tileSize * math.floor(player.x/g_tileSize)
-			elseif player.direction == "right" then
-				player.x = g_tileSize * math.ceil(player.x/g_tileSize) - player.w - 0.0000001
-			end
-			player.direction = "neutral"
-		else
-			player.x, player.y = projection.x, projection.y
-		end
+	self:motion(player)
+
+	-- move enemies
+	for _, enemy in pairs(self.enemies) do
+		self:motion(enemy, true)
 	end
 
 	-- keep view in a deadzone of the player
@@ -196,11 +264,6 @@ function Level:step()
 end
 
 function Level:draw()
-	-- draw player
-	love.graphics.setColor(0, 255, 0)
-	local player = self.player
-	love.graphics.rectangle("fill", player.x, player.y, player.w, player.h)
-
 	-- draw walls
 	love.graphics.setColor(40, 40, 40)
 	local wallGrid = self.wallGrid
@@ -210,6 +273,18 @@ function Level:draw()
 				love.graphics.rectangle("fill", (i - 1) * g_tileSize, (j - 1) * g_tileSize, g_tileSize, g_tileSize)
 			end
 		end
+	end
+
+	-- draw player
+	love.graphics.setColor(0, 255, 0)
+	local player = self.player
+	love.graphics.rectangle("fill", player.x, player.y, player.w, player.h)
+
+	-- draw enemies
+	love.graphics.setColor(180, 30, 30)
+	local enemies = self.enemies
+	for _, enemy in pairs(enemies) do
+		love.graphics.rectangle("fill", enemy.x, enemy.y, enemy.w, enemy.h)
 	end
 end
 
